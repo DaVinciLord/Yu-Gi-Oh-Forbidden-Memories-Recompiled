@@ -2233,6 +2233,9 @@ class ModInfoTab(Tab):
         except Exception:       # a half-made form elsewhere: said when it is applied
             return ""
         needed, reasons = compat.required(built, self.project)
+        problems = compat.problems(built, self.project)
+        if problems:
+            return "Mod API requirement is incomplete: " + "; ".join(problems) + ". See Conflicts."
         written = built.get("min_api")
         if isinstance(written, bool) or not isinstance(written, int):
             written = None

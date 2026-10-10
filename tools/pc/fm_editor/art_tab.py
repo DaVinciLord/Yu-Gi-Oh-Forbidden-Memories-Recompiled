@@ -163,8 +163,11 @@ class ArtTab(Tab):
         height = page.winfo_height() - px(self, 12)
         if width <= 1 or height <= 1:
             return
+        # Less the right side's own left padding (10, as made): wrapped at
+        # the whole room, the text asked a pixel more than the page had and
+        # the bottom scrollbar showed.
         for label in (self.how, self.status):
-            label.configure(wraplength=max(px(self, 300), width - px(self, 4)))
+            label.configure(wraplength=max(px(self, 300), width - 10 - px(self, 4)))
         rows = self.rows
         gap = px(self, 6)           # between two boxes, across or down (arrange())
         metrics = {}

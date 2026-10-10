@@ -116,10 +116,16 @@ checked as well, when it starts.
 The FM Editor writes `min_api` on save as the lowest one of these that has
 everything the mod uses, never lowering one written higher, and its Mod
 info tab says which game that is and why (`tools/pc/fm_editor/compat.py`).
+External `packs` files are inspected too, without rewriting them. An unreadable
+or malformed file is an error in Conflicts and leaves the compatibility
+requirement explicitly incomplete until fixed.
 A mod written by hand should do the same. A release that adds a mod.json
 feature an older game would leave out raises `MEMORIES_MOD_API`
 (`src/pc/mods/mod_types.h`), lists the feature here and in `compat.py`,
 and keeps every lower `min_api` loading.
+When tagging the first API 11 release, replace the unreleased description in
+the table and add that tag to `compat.RELEASES`; do not assign an unchosen
+release number in advance.
 
 ## Data mods: no code at all
 

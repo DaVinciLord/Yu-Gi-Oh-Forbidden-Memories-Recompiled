@@ -1255,7 +1255,7 @@ def read_packs(project: Project, manifest: dict, messages: list):
     project.packs, project.packs_file = [], None
     if isinstance(value, str):
         project.packs_file = value
-        messages.append(f"\"packs\" names the file {value}; kept as written (the editor does not read it)")
+        messages.append(f"\"packs\" names the file {value}; kept as written (checked for compatibility, not editable here)")
     elif isinstance(value, list):
         project.packs = copy.deepcopy(value)
     elif value is not None:

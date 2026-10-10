@@ -86,6 +86,7 @@ def command_import(arguments) -> int:
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="fm_editor", description="FM Editor: mods for the Forbidden Memories port")
+    parser.add_argument("--version", action="store_true", help="show the editor build and supported mod API")
     parser.add_argument("--game", help="the game: a folder with SLUS_014.11 and DATA/WA_MRG.MRG, or the .bin")
     parser.add_argument("--mod", help="a mod folder to open")
     commands = parser.add_subparsers(dest="command")
@@ -100,12 +101,21 @@ def build_parser():
     imp.add_argument("--wa", help="the modified WA_MRG.MRG, when the first argument is SLUS_014.11 alone")
     imp.add_argument("--game", help="the retail game (default: found where the port looks)")
     imp.add_argument("--id", help="the mod id (default: from the file name)")
+    smoke = commands.add_parser("self-test", help="check the GUI and export using synthetic game files (needs a display)")
+    smoke.add_argument("--output", required=True, help="JSON result file, also on Windows without a console")
     return parser
 
 
 def main(argv=None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
+    if arguments.version:
+        from .build_info import description
+        print(description())
+        return 0
+    if arguments.command == "self-test":
+        from .self_test import run
+        return run(arguments.output)
     if arguments.command == "check":
         return command_check(arguments)
     if arguments.command == "import":
