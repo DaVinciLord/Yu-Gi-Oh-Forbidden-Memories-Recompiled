@@ -26,6 +26,14 @@ HOST_LIBC = {
     "strspn",
     "strstr",
     "memchr",
+    "strtol",
+    "fgets",
+    "fwrite",
+    "fseek",
+    "fclose",
+    "isalnum",
+    "isspace",
+    "tolower",
 }
 CHECKED_LIBC = {
     "__memcpy_chk",

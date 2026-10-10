@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import subprocess
 import tempfile
-from llvm_guest import ROOT, TranslationError, inspect, normalize, translate, toolchain
+from llvm_guest import ROOT, TranslationError, inspect, normalize, process, translate, toolchain
 from macos_deps import sdk_path
 from direct_overlay_bridges import validate_declaration
 from native_call_marshalling import emit_native_calls
@@ -12,6 +12,12 @@ from native_call_marshalling import emit_native_calls
 
 class GuestExecutionTests(unittest.TestCase):
     def test_memory_conversions_copies_and_callback_execute(self):
+        self.exercise_memory()
+
+    def test_mod_memory_copies_use_guest_wrappers(self):
+        self.exercise_memory(mod=True)
+
+    def exercise_memory(self, mod=False):
         # Execute the transformed IR against checked host storage. This
         # catches valid-looking IR that still dereferences a PS1 token.
         source = '''
@@ -62,6 +68,18 @@ uint32_t GuestRuntime_EncodePointer(void *pointer) {
     assert(address >= (uintptr_t)memory && address <= (uintptr_t)(memory + sizeof(memory)));
     return 0x80010000u + (uint32_t)(address - (uintptr_t)memory);
 }
+void *GuestRuntime_memcpy(void *d, const void *s, uint64_t n) {
+    memcpy(GuestRuntime_ResolveData(d, n), GuestRuntime_ResolveData((void *)s, n), n);
+    return d;
+}
+void *GuestRuntime_memmove(void *d, const void *s, uint64_t n) {
+    memmove(GuestRuntime_ResolveData(d, n), GuestRuntime_ResolveData((void *)s, n), n);
+    return d;
+}
+void *GuestRuntime_memset(void *d, int c, uint64_t n) {
+    memset(GuestRuntime_ResolveData(d, n), c, n);
+    return d;
+}
 static int callback(int value) { ++callbacks; return value + 7; }
 void *GuestRuntime_ResolveFunction(void *pointer) {
     assert((uintptr_t)pointer == 0x80020000u);
@@ -82,7 +100,10 @@ int main(void) {
     return 0;
 }
 '''
-        translated = translate(source, {'slot': 0x80010000})
+        translated = process('translate', source, pins={'slot': 0x80010000}, mod_unit=mod)
+        if mod:
+            for name in ('memcpy', 'memmove', 'memset'):
+                self.assertIn('call ptr @GuestRuntime_' + name, translated)
         with tempfile.TemporaryDirectory(dir=ROOT / 'tmp') as folder:
             folder = Path(folder)
             (folder / 'fixture.ll').write_text(translated)

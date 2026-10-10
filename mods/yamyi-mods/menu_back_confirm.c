@@ -94,7 +94,7 @@ int Menu_IsOpen(void);
 
 /* The sprite ordering table the game's own screen-space primitives go to:
  * func_80015EF4.c takes `tab = D_800E9D90` and sorts into `tab[2]`. */
-extern void *D_800E9D90[];
+extern void *G32 D_800E9D90[];
 void GsSortPoly(void *primitive, void *ot, unsigned short priority);
 
 typedef struct { s16 x, y, w, h; } ModRect;   /* psyq/libgpu.h RECT */

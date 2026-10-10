@@ -130,6 +130,18 @@ def main():
             [None],
         ),
         (
+            "translated-libc",
+            [
+                "tests/pc/translated_libc_test.c",
+                "src/pc/guest/translated_libc.c",
+                "src/pc/guest/translated_runtime.c",
+                "src/pc/guest/state_io.c",
+                "src/pc/memory.c",
+            ],
+            [],
+            [None],
+        ),
+        (
             "state-native-memory",
             [
                 "tests/pc/state_native_memory_test.c",

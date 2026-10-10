@@ -20,6 +20,9 @@ static void expect_abort(int which)
 {
     int status; pid_t child = fork(); assert(child >= 0);
     if (!child) {
+        if (which == 7) GuestRuntime_fwrite(G(0x100), SIZE_MAX, 2, stdout);
+        if (which == 8) GuestRuntime_fgets(G(MEMORIES_RAM_SIZE - 1), 8, stdin);
+        if (which == 9) GuestRuntime_fclose(G(0x100));
         if (which == 0) GuestRuntime_strlen((char *)(uintptr_t)0xd0000000u);
         if (which == 1) GuestRuntime_memcpy(G(MEMORIES_RAM_SIZE - 1), "xx", 2);
         if (which == 2) GuestRuntime_sprintf(G(0x200), "%ls", G(0x100));
@@ -69,7 +72,7 @@ int main(void)
     int values[] = {7, -2, 4, 0};
     GuestRuntime_memcpy(G(0x300), values, sizeof(values));
     assert(GuestRuntime_RegisterFunction(0x80010000u, (void (*)(void))compare) == 0);
-    GuestRuntime_qsort(G(0x300), 4, sizeof(int), (void *)(uintptr_t)0x80010000u);
+    GuestRuntime_qsort(G(0x300), 4, sizeof(int), (int (*)(const void *, const void *))(uintptr_t)0x80010000u);
     int *sorted = (int *)(memory->ram + 0x300);
     assert(sorted[0] == -2 && sorted[1] == 0 && sorted[2] == 4 && sorted[3] == 7);
     assert(GuestRuntime___memcpy_chk(G(0x400), "fortify", 8, 8) == G(0x400));
@@ -79,7 +82,29 @@ int main(void)
     assert(GuestRuntime___sprintf_chk(G(0x480), 0, 32, "%s %d", G(0x400), 7) == 15);
     assert(!strcmp((char *)memory->ram + 0x480, "fortify works 7"));
     assert(GuestRuntime_snprintf(NULL, 0, "%s", G(0x400)) == 13);
-    for (int i = 0; i < 7; i++) expect_abort(i);
+    GuestRuntime_strcpy(G(0x500), " -123tail");
+    char *end = NULL;
+    assert(GuestRuntime_strtol(G(0x500), &end, 10) == -123 && end == G(0x505));
+    assert(GuestRuntime_strtol(G(0x500), G(0x520), 10) == -123);
+    memcpy(&end, memory->ram + 0x520, sizeof(end));
+    assert(end == G(0x505));
+    assert(GuestRuntime_strtol("42", NULL, 10) == 42);
+    assert(GuestRuntime_strtol("invalid", &end, 10) == 0 && !strcmp(end, "invalid"));
+    assert(GuestRuntime_isalnum('A') && !GuestRuntime_isalnum('!'));
+    assert(GuestRuntime_isspace(' ') && GuestRuntime_tolower('A') == 'a');
+    FILE *file = tmpfile(); assert(file);
+    GuestRuntime_strcpy(G(0x540), "123\n");
+    assert(GuestRuntime_fwrite(G(0x540), 1, 4, file) == 4);
+    assert(GuestRuntime_fseek(file, 0, SEEK_SET) == 0);
+    assert(GuestRuntime_fgets(G(0x560), 16, file) == G(0x560));
+    assert(!strcmp((char *)memory->ram + 0x560, "123\n"));
+    assert(GuestRuntime_fgets(G(0x560), 16, file) == NULL);
+    assert(GuestRuntime_fseek(file, 0, SEEK_SET) == 0);
+    char native_line[16];
+    assert(GuestRuntime_fgets(native_line, sizeof(native_line), file) == native_line);
+    assert(!strcmp(native_line, "123\n"));
+    assert(GuestRuntime_fclose(file) == 0);
+    for (int i = 0; i < 10; i++) expect_abort(i);
     GuestRuntime_Reset(); free(memory);
     puts("Translated libc: guest strings, bounded reads, memory, formatting, callbacks and invalid spans passed");
 }

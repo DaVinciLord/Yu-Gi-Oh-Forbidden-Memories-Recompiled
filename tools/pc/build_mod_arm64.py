@@ -6,6 +6,7 @@ recompile. The existing ELF object is preserved for Linux/Windows.
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,6 +20,16 @@ from guest_build import (
 )
 from llvm_guest import ROOT, inspect, normalize, process, toolchain, validate_c_abi
 from macos_deps import sdk_path
+
+
+# Pointer-free math entries from src/pc/mods/mod_libc.c. Calls taking guest
+# pointers must use the game's translated wrappers, never libSystem directly.
+SYSTEM_MATH_IMPORTS = frozenset({
+    "acos", "asin", "atan", "atan2", "atan2f", "ceil", "ceilf", "cos", "cosf",
+    "exp", "expf", "fabs", "fabsf", "floor", "floorf", "fmod", "fmodf", "log",
+    "log10", "logf", "pow", "powf", "sin", "sinf", "sqrt", "sqrtf", "tan", "tanf",
+})
+SYSTEM_RUNTIME_IMPORTS = {"abort", "dyld_stub_binder"}
 
 
 def mod_pins(summary, pin_tables):
@@ -155,6 +166,15 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ],
         check=True,
     )
+    # dyld resolves these without consulting game exports. Only pointer-free
+    # math and runtime helpers may bypass the translated guest wrappers.
+    rows = subprocess.check_output(["nm", "-u", "-m", str(staged)], text=True).splitlines()
+    system_imports = set()
+    for line in rows:
+        match = re.search(r' external (\S+) \(from libSystem\)$', line)
+        if match:
+            name = match.group(1)
+            system_imports.add(name[1:] if name.startswith('_') else name)
     # Mach-O prepends one underscore; preserve names beginning with one.
     imports = {
         line.strip()[1:] if line.strip().startswith("_") else line.strip()
@@ -163,7 +183,13 @@ def link_library(folder, library_name, objects, routines, compiler, sdk, exporte
         ).splitlines()
         if line.strip()
     }
-    missing = imports - exported - {"abort", "dyld_stub_binder"}
+    unsafe_system = system_imports - SYSTEM_MATH_IMPORTS - SYSTEM_RUNTIME_IMPORTS
+    if unsafe_system:
+        raise SystemExit(
+            "ARM64 mod cannot import from libSystem: "
+            + ", ".join(sorted(unsafe_system))
+        )
+    missing = imports - exported - system_imports - SYSTEM_RUNTIME_IMPORTS
     if missing:
         raise SystemExit("ARM64 game does not provide: " + ", ".join(sorted(missing)))
     return staged

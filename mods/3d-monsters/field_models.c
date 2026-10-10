@@ -91,9 +91,9 @@
 #include <math.h>
 
 extern u8 D_8009B1D5;          /* the side the view belongs to */
-extern void *D_800E9D98[];     /* D_800E9D90[2]: func_800540B4's table */
-extern GsOT *D_800E9D90[4];    /* the four ordering tables of the frame */
-extern void (*D_800E9DB0[4])(void); /* the frame service callbacks */
+extern void *G32 D_800E9D98[]; /* D_800E9D90[2]: func_800540B4's table */
+extern GsOT *G32 D_800E9D90[4]; /* the four ordering tables of the frame */
+extern void (*G32 D_800E9DB0[4])(void); /* the frame service callbacks */
 extern u32 D_800FE240;         /* GsSetWorkBase */
 
 /* One monster's private RAM. 96 sectors of model data, then the module

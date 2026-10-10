@@ -58,7 +58,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern GsOT *D_800E9D90[4];    /* the four ordering tables of the frame */
+extern GsOT *G32 D_800E9D90[4]; /* the four ordering tables of the frame */
 extern MATRIX D_800FE148;      /* GsWSMATRIX: GsSetRefView2's world-screen matrix */
 
 static const MemoriesModHost *host;
@@ -209,7 +209,7 @@ static Art *acquire(int card)
 static int project(int x, int y, int z, int *sx, int *sy)
 {
     SVECTOR v;
-    long sxy, p, flag, depth;
+    PSXLONG sxy, p, flag, depth;
     v.vx = (short)x;
     v.vy = (short)y;
     v.vz = (short)z;

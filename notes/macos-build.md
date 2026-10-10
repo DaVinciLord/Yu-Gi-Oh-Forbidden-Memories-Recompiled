@@ -55,7 +55,12 @@ you choose your own USA raw `.bin` disc. The executable and dependencies are
 bundled, so running the app requires neither Python nor LLVM. Saves, settings
 and user mods remain in `~/Library/Application Support/YFM Re-Decomp`.
 The upstream language packs are included; no private disc or HD texture pack
-is copied. Code mods must be compiled separately for the ARM64 ABI.
+is copied. The five repository mods are included: 3D Monsters, Hand Camera,
+AI Hard Mode, Yamyi Mods and Drop Missing Cards. The packager compiles their
+code libraries for this ARM64 build and signs them before signing the app.
+3D Monsters and Hand Camera are enabled by default. Open **Game > Mods**
+to enable or disable mods and adjust their settings. Additional
+code mods must be compiled separately for the ARM64 ABI.
 
 The package is ad-hoc signed and verified locally. It is not Developer ID
 signed or notarized; a downloaded copy may require **Open Anyway** in

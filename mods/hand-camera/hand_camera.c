@@ -24,7 +24,7 @@
 
 extern ViewState D_800F2848;
 extern u16 gDuel_wSceneStateFlags;
-extern void (*D_800E9DB0[4])(void); /* the frame service callbacks */
+extern void (*G32 D_800E9DB0[4])(void); /* the frame service callbacks */
 extern void Duel_DrawFieldCards(void);
 
 #define HAND_STATE 4

@@ -238,7 +238,7 @@ jobs:
           fi
       - name: Build the complete macOS ARM64 game without a disc
         run: MEMORIES_VERSION="$PACKAGE_VERSION" python tools/pc/build.py --target macos
-      - name: Package and verify the macOS app
+      - name: Build bundled ARM64 mods, package and verify the macOS app
         run: |
           python3 tools/pc/package_macos.py --binary tmp/pc/macos/memories-arm64 --out tmp/pc-release/macos-arm64 --version "$PACKAGE_VERSION"
           python3 tools/pc/test_package_macos.py --archive "tmp/pc-release/macos-arm64/yfm-redecomp-$PACKAGE_VERSION-macos-arm64.zip"

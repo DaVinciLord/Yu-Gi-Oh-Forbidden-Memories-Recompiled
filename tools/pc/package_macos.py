@@ -110,6 +110,35 @@ def inspect_icon(data):
         raise ValueError("ICNS file contains no application icon images")
 
 
+def shipped_mod_files():
+    """Only repository-owned resources, never locally installed mods or objects."""
+    tracked = subprocess.check_output(
+        ["git", "ls-files", "-z", "mods"], cwd=ROOT, text=True
+    ).split("\0")
+    return [Path(name) for name in tracked if name and
+            Path(name).suffix not in (".c", ".h", ".o", ".dylib")]
+
+
+def stage_mods(resources, game):
+    from build_mod_arm64 import build
+
+    files = shipped_mod_files()
+    libraries = []
+    for relative in files:
+        destination = resources / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, destination)
+    for relative in files:
+        if relative.name != "mod.json":
+            continue
+        manifest = json.loads((ROOT / relative).read_text(encoding="utf-8-sig"))
+        if manifest.get("library"):
+            library = build(ROOT / relative.parent, resources / relative.parent, game=game)
+            subprocess.run(["codesign", "--force", "--sign", "-", str(library)], check=True)
+            libraries.append(library)
+    return files, libraries
+
+
 def package(binary, out, label, *, icon=None):
     if sys.platform != "darwin":
         raise ValueError("macOS packaging requires codesign on a Mac")
@@ -150,6 +179,7 @@ def package(binary, out, label, *, icon=None):
     languages.mkdir()
     for name in ("en-eu", "fr", "de", "it", "es"):
         shutil.copyfile(ROOT / f"languages/{name}.txt", languages / f"{name}.txt")
+    mod_files, mod_libraries = stage_mods(resources, binary.parent)
     revision = identity["revision"]
     build_number = subprocess.check_output(
         ["git", "rev-list", "--count", "HEAD"], cwd=ROOT, text=True
@@ -200,9 +230,13 @@ to open it. Do not disable Gatekeeper globally.
 Saves, settings and your mods use ~/Library/Application Support/YFM Re-Decomp.
 Keep ordinary .sav files to move progress between versions. Native .state
 files require the same executable and mod profile. Data mods use the existing
-format; code mods require a separately built ARM64 dylib, not an i386 .o.
-No precompiled code mods or mod SDK are bundled. See the source repository's
-notes/modding.md for the ARM64 build commands.
+format; code mods require an ARM64 dylib, not an i386 .o.
+Included mods: 3D Monsters, Hand Camera, AI Hard Mode, Yamyi Mods and
+Drop Missing Cards. 3D Monsters and Hand Camera are enabled by default.
+Open Game > Mods to enable or disable mods and adjust their settings.
+The included code mods are compiled for this build. Additional user mods go
+in ~/Library/Application Support/YFM Re-Decomp/mods. No mod SDK is bundled;
+see notes/modding.md in the source repository for the ARM64 build commands.
 
 Static dependencies: SDL3, libpng, zlib and FreeType; licenses are inside
 Contents/Resources/licenses. Portions of this software are copyright
@@ -224,6 +258,10 @@ Contents/Resources/licenses. Portions of this software are copyright
         else None,
         source_binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
         source_uuid=binary_uuid(binary.read_bytes()),
+        mod_files={str(path): hashlib.sha256((resources / path).read_bytes()).hexdigest()
+                   for path in mod_files} | {
+                       str(path.relative_to(resources)): hashlib.sha256(path.read_bytes()).hexdigest()
+                       for path in mod_libraries},
     )
     (resources / "build.json").write_text(json.dumps(manifest, indent=2) + "\n")
     subprocess.run(["codesign", "--force", "--sign", "-", str(app)], check=True)

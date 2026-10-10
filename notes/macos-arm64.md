@@ -108,6 +108,24 @@ mod loader checks exports and ABI signatures, and rejects unsupported
 constructors, destructors, and thread-local storage. See
 [modding](modding.md#native-macos-arm64-code-mods) for the build details.
 
+The 3D Monsters mod reads battle models from the player's disc
+(`DATA/MODEL.MRG`); no separate model pack is required. Its shared callback
+and ordering tables use the game's canonical headers and guest-width pointer
+declarations on the translated backend. Other ports retain their upstream
+declarations and rendering path. A native-width declaration reads the wrong callback
+slot and can silently prevent field rendering on ARM64.
+
+Verify a packaged build with a real face-up fusion, model loading and a field
+image comparison against the disabled mod:
+
+```sh
+python3 tools/pc/test_arm64_3d_monsters.py --binary "/path/to/YFM Re-Decomp.app/Contents/MacOS/memories-arm64" --mods "/path/to/YFM Re-Decomp.app/Contents/Resources/mods" --disc "/path/to/disc.bin"
+```
+
+Inspect the generated `tmp/3d-monsters-regression/on/terrain.png` for the
+standing monster. This disc-backed test is separate from the ROM-free package
+and loader checks.
+
 Native `.state` files include machine registers and stack data. They cannot
 cross 32-bit/64-bit or operating-system builds. The macOS loader requires the same build identity and Mach-O UUID; it
 relocates host pointers when ASLR moves that executable in a new process. The
