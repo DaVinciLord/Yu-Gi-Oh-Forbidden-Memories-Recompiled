@@ -42,7 +42,9 @@ void AiScript_CalcCardPower(void)
         power = 0;
         if (mode == 0) {
 #ifdef MEMORIES_PC
-            switch (card > 0 ? Cards_EffectId(card) : card) {
+            /* A data-defined replacement has no retail value unless its
+             * cards entry explicitly supplies the AI analogue. */
+            switch (card > 0 ? Cards_AiId(card) : card) {
 #else
             switch (card) {
 #endif

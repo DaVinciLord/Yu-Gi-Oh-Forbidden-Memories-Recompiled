@@ -150,7 +150,7 @@ static int read_each(const char *mod, int index, int n, const JsonValue *each, i
     return filter(mod, index, n, "\"for_each\": ", each, &out->each_type, &out->each_attribute);
 }
 
-static int read_one(const char *mod, int index, int n, const JsonValue *entry, MonsterEffect *out)
+static int read_one(const char *mod, int index, int n, const JsonValue *entry, MonsterEffect *out, int card_effect)
 {
     const JsonValue *value;
     int when, action, target, v;
@@ -160,7 +160,9 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
         Mods_Note(mod, "cards[%d]: monster_effects[%d] is not an object", index, n);
         return 0;
     }
-    when = named(Json_String(Json_Member(entry, "when"), NULL), MonsterEffect_WhenNames, MONSTER_WHEN_COUNT);
+    when = card_effect ? MONSTER_WHEN_SUMMON
+                       : named(Json_String(Json_Member(entry, "when"), NULL), MonsterEffect_WhenNames,
+                               MONSTER_WHEN_COUNT);
     action = named(Json_String(Json_Member(entry, "do"), NULL), MonsterEffect_DoNames, MONSTER_DO_COUNT);
     if (when < 0) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"when\" must be summon, flip, draw, combat, destroyed, "
@@ -174,13 +176,15 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
     }
     value = Json_Member(entry, "target");
     target = value ? named(Json_String(value, NULL), MonsterEffect_TargetNames, MONSTER_TARGET_COUNT)
-                   : MonsterEffect_DefaultTarget(when, action);
+                   : card_effect ? ((action == MONSTER_DO_DAMAGE || action == MONSTER_DO_DESTROY)
+                                        ? MONSTER_TARGET_OPPONENT : MONSTER_TARGET_OWN)
+                                 : MonsterEffect_DefaultTarget(when, action);
     if (target < 0) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"target\" must be self, own, others, opponent, all or battle",
                   index, n);
         return 0;
     }
-    if (!MonsterEffect_Allowed(when, action, target)) {
+    if (!card_effect && !MonsterEffect_Allowed(when, action, target)) {
         Mods_Note(mod, "cards[%d]: monster_effects[%d]: \"%s\" cannot be done on \"%s\"%s", index, n,
                   action == MONSTER_DO_BOOST || action == MONSTER_DO_DESTROY ? MonsterEffect_TargetNames[target]
                                                                              : MonsterEffect_DoNames[action],
@@ -188,6 +192,17 @@ static int read_one(const char *mod, int index, int n, const JsonValue *entry, M
                   when == MONSTER_WHEN_COMBAT ? " (a boost of self or battle, heal or damage)"
                   : when == MONSTER_WHEN_FACE_UP ? " (boosts only)"
                   : action == MONSTER_DO_DESTROY ? " (destroy takes opponent, or battle on flip)" : "");
+        return 0;
+    }
+    /* A spell or trap is not a monster on the field: there is no useful
+     * "self", "others" or battle target.  Its owner is the active side
+     * while it resolves, so own/opponent/all work just as they do for a
+     * monster effect. */
+    if (card_effect && (target == MONSTER_TARGET_SELF || target == MONSTER_TARGET_OTHERS ||
+                        target == MONSTER_TARGET_BATTLE ||
+                        ((action == MONSTER_DO_HEAL || action == MONSTER_DO_DAMAGE) &&
+                         target == MONSTER_TARGET_ALL))) {
+        Mods_Note(mod, "cards[%d]: card_effects[%d]: a spell or trap target must be own, opponent or all", index, n);
         return 0;
     }
     out->when = (unsigned char)when;
@@ -250,7 +265,27 @@ int MonsterEffects_Read(const char *mod, int index, const JsonValue *list, Monst
             Mods_Note(mod, "cards[%d]: at most %d monster_effects; the rest are left out", index, MONSTER_EFFECTS_MAX);
             break;
         }
-        count += read_one(mod, index, n, entry, out + count);
+        count += read_one(mod, index, n, entry, out + count, 0);
+    }
+    return count;
+}
+
+int CardEffects_Read(const char *mod, int index, const JsonValue *list, MonsterEffect *out)
+{
+    const JsonValue *entry;
+    int n, count = 0;
+    if (!list) return -1;
+    if (Json_TypeOf(list) == JSON_NULL) return 0;
+    if (Json_TypeOf(list) != JSON_ARRAY) {
+        Mods_Note(mod, "cards[%d]: \"card_effects\" must be a list", index);
+        return -1;
+    }
+    for (n = 0, entry = Json_At(list, 0); entry; n++, entry = Json_Next(entry)) {
+        if (count == MONSTER_EFFECTS_MAX) {
+            Mods_Note(mod, "cards[%d]: at most %d card_effects; the rest are left out", index, MONSTER_EFFECTS_MAX);
+            break;
+        }
+        count += read_one(mod, index, n, entry, out + count, 1);
     }
     return count;
 }

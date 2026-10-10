@@ -17,6 +17,7 @@
 #include "duel_trap_resolution.h"
 #ifdef MEMORIES_PC
 #include "pc/cards/cards.h"
+#include "pc/cards/monster_effects_duel.h"
 #include "pc/cards/tables.h"
 #endif
 
@@ -36,6 +37,23 @@ u8 gDuel_abTrapAttackThresholds[DUEL_ATTACK_TRAP_COUNT] = {
 };
 
 #ifdef MEMORIES_PC
+/* A replacement trap still uses its inherited/aliased attack threshold to
+ * decide whether it springs. Once selected, however, it is consumed and its
+ * data-defined effects take over; clearing the retail signal lets battle
+ * continue without the old attack-trap behavior. */
+static int resolve_replacement_attack_trap(void)
+{
+    DuelCardRecord *card = &D_801A7AD8[D_8009B1B8];
+    int owner = (int)(card - D_801A7AD8) / DUEL_CARD_SIDE_RECORD_COUNT;
+    if (!Cards_CardEffectsReplace(card->card_id)) return 1;
+    MonsterEffects_AttackTrapPlayed(card->card_id, owner);
+    DuelCard_RemoveFromField(card);
+    D_800E9FF0[owner].rank.traps_triggered++;
+    D_8009B22A = 0;
+    D_8009B1B8 = 0;
+    return 0;
+}
+
 /* Retail groups equal effects into one slot. With per-card thresholds that
  * would let an ineligible copy hide an eligible one. Check each actual card,
  * keeping retail effect priority and the last field slot for equal effects.
@@ -75,7 +93,7 @@ static int select_custom_attack_trap(u8 *attacker)
     if (!chosen_effect) return 0;
     D_8009B22A = chosen_effect;
     D_8009B1B8 = chosen_slot;
-    return 1;
+    return resolve_replacement_attack_trap();
 }
 #endif
 
@@ -185,14 +203,22 @@ s32 Duel_SelectAttackTrap(u8 *p) {
             j2 = sel + 0x10;
             D_8009B1B8 =
                 *(u8 *)(b4 + (u32)&((u16 *)0)[j2] + off4 + 0x3C68);
+#ifdef MEMORIES_PC
+            return resolve_replacement_attack_trap();
+#else
             return 1;
+#endif
         }
         if (0) {
         hit:
             w = e->object;
             D_8009B22A = v;
             D_8009B1B8 = w->field_6A;
+#ifdef MEMORIES_PC
+            return resolve_replacement_attack_trap();
+#else
             return 1;
+#endif
         }
     }
     i = 0;
@@ -304,6 +330,12 @@ m3:
         return 1;
     }
     q = &D_800E9FF0[D_8009B1D5 ^ 1];
+#ifdef MEMORIES_PC
+    /* The selected field record is the actual trap, while D_8009B22A is
+     * the retail behavior it borrowed.  Queue the former's data-defined
+     * actions once its normal trap presentation has completed. */
+    MonsterEffects_TrapPresented(D_801A7AD8[D_8009B1B8].card_id, D_8009B1D5 ^ 1);
+#endif
     q->rank.traps_triggered = q->rank.traps_triggered + 1;
     return 0;
 }

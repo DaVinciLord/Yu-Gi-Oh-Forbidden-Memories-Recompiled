@@ -54,7 +54,7 @@ enum {
 };
 #define MONSTER_EFFECTS_MAX 8
 
-typedef struct {
+typedef struct MonsterEffect {
     unsigned char when, action, target;
     signed char type, attribute;     /* a boost's or destroy's filter: -1 any */
     unsigned short card;             /* MONSTER_DO_MAGIC: the retail magic card */
@@ -85,6 +85,11 @@ int MonsterEffect_DefaultTarget(int when, int action);
  * MONSTER_EFFECTS_MAX), its length returned; -1 when the entry has none.
  * What is wrong is noted for the mod and left out. */
 int MonsterEffects_Read(const char *mod, int index, const struct JsonValue *list, MonsterEffect *out);
+
+/* The actions available to a spell or trap card's "card_effects" are the
+ * same as a monster effect's actions, but they happen when the card is
+ * played (or springs), rather than at one of a monster's field events. */
+int CardEffects_Read(const char *mod, int index, const struct JsonValue *list, MonsterEffect *out);
 
 /* A card's effects (cards.c): the list and its length, 0 for none. */
 int Cards_MonsterEffects(int id, const MonsterEffect **effects);

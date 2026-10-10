@@ -11,6 +11,9 @@ int Cards_EffectId(int id) { return id; }
 int Cards_BaseId(int id) { return id; }
 int Cards_TrapId(int id) { return id >= 681 && id <= 686 ? id : 0; }
 int Cards_TrapThreshold(int id, int fallback) { (void)id; return fallback; }
+int Cards_CardEffectsReplace(int id) { (void)id; return 0; }
+void MonsterEffects_AttackTrapPlayed(int card, int side) { (void)card; (void)side; }
+void DuelCard_RemoveFromField(DuelCardRecord *card) { (void)card; abort(); }
 int Cards_Type(int id) { (void)id; abort(); }
 int Cards_Level(int id) { (void)id; abort(); }
 int Cards_InFusionGroup(int id, int group) { (void)id; (void)group; abort(); }

@@ -147,6 +147,21 @@ static void hand_cases(void)
     o.materials = 3; o.material_cost = 0; d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[2] >= 11);
     b = empty(); b.hand_count = 1; b.hand[0] = magic(347,20); b.enemy_lp = 900;
     d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && !d.selection[8]);
+    /* A replacement Magic with an ai_effect acts like that analogue; without
+     * one it is safely set rather than guessed as its obsolete retail card.
+     * A trap analogue is still a reactive face-down card, never a spell. */
+    b.hand[0] = (HmCard){500,347,20,0,0,0,0,0};
+    d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && !d.selection[8]);
+    b.hand[0].effect = 0;
+    d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && d.selection[8]);
+    b.hand[0] = (HmCard){501,681,21,0,0,0,0,0};
+    d = Hm_PlanHand(&b,&o,&rules);
+    assert(d.selection[0] == 11 && d.selection[6] == 6 && d.selection[8]);
+    /* Retail trap analogues currently have no utility score. Keep this
+     * deliberately cross-type fixture as a future-proof guard: even if a
+     * Trap is assigned positive utility, it must still be set, never cast. */
+    b.hand[0] = (HmCard){502,347,21,0,0,0,0,0};
+    d = Hm_PlanHand(&b,&o,&rules); assert(d.selection[0] == 11 && d.selection[8]);
     b = empty(); b.hand_count = 1; b.hand[0] = magic(657,23);
     b.own[0] = monster(10,1800,1000); b.own[0].star = 2;
     b.enemy[0] = monster(20,2600,1000); b.enemy[0].star = 3;

@@ -27,9 +27,11 @@ static DuelCardDisplayObject objects[10];
 static int spawned, released, original_calls, hidden_lookups, observed_visibility, observed_mode;
 static int deck_mode, hidden_mode, custom_window = 20, retail_hand = 1;
 static int terrain_override, terrain_points, star_points;
+static int ai_card, ai_value;
 
 int Cards_Valid(int id) { return id > 0 && id < 1024; }
 int Cards_EffectId(int id) { if (id == 999) hidden_lookups++; return id; }
+int Cards_AiId(int id) { return id == ai_card ? ai_value : id; }
 int Tables_TerrainBonus(int field, int type, int *bonus)
 {
     if (!terrain_override || field != 2 || type != 3) return 0;
@@ -117,6 +119,7 @@ static void reset(void)
         D_800907CC[i+5] = i+15;
     }
     spawned = released = original_calls = hidden_lookups = 0;
+    ai_card = ai_value = 0;
     hidden_mode = deck_mode = 0; retail_hand = 1;
     initialize(D_801A8000);
 }
@@ -167,6 +170,17 @@ int main(void)
     strongest();
     assert(observed_mode == 0 && observed_visibility == 1 && gAiScript_aMemory[2] == 0);
     assert(gAiScript_State.script_cursor == D_801A8000 + 5);
+
+    /* A replacement spell/trap's retail effect is not its tactical effect.
+     * Hard mode must use the approved analogue, or treat it as unknown. */
+    reset();
+    gDuel_adwCardStats[499] = CARD_TYPE_MAGIC << CARD_STAT_TYPE_SHIFT;
+    ai_card = 500; ai_value = 337;
+    assert(card_info(500).effect == 337);
+    ai_value = -1;
+    assert(card_info(500).effect == 0);
+    gDuel_adwCardStats[499] = 0;
+    assert(card_info(500).effect == 500);
 
     /* A selected held material is reserved. The lowest-value other held card
      * swaps with an upcoming card; both deck identity and art index follow. */

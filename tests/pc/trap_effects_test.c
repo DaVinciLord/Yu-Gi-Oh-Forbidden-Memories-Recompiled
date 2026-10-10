@@ -5,6 +5,7 @@
 #endif
 #include <assert.h>
 #include <stdio.h>
+#include <stddef.h>
 #include <string.h>
 #include "../../src/game/duel_trap_resolution.c"
 
@@ -18,13 +19,28 @@ ViewState D_800F2848;
 void func_80022D94(s32 frames, s32 x, s32 z, s32 y, s32 value)
 { (void)frames; (void)x; (void)z; (void)y; (void)value; assert(0); }
 DuelEffectRequest *DuelEffect_CreateRequest(s32 id) { (void)id; assert(0); return NULL; }
-void DuelCard_RemoveFromField(DuelCardRecord *card) { (void)card; assert(0); }
+void DuelCard_RemoveFromField(DuelCardRecord *card) { card->flags = 0; card->object = NULL; }
 void SD_SEPlayFull(u32 sound) { (void)sound; assert(0); }
 DuelCardRecord D_801A7AD8[30];
 static DisplayObject objects[30];
-static int effects[1024], thresholds[1024], attack;
+static int effects[1024], thresholds[1024], attack, replace_id, played_card, played_side;
 int Cards_TrapId(int id) { return effects[id]; }
 int Cards_TrapThreshold(int id, int fallback) { return thresholds[id] >= 0 ? thresholds[id] : fallback; }
+int Cards_CardEffectsReplace(int id) { return id == replace_id; }
+void MonsterEffects_CardPlayed(int card, int side) { (void)card; (void)side; }
+void MonsterEffects_TrapPlayed(int card, int side) { (void)card; (void)side; }
+void MonsterEffects_TrapPresented(int card, int side) { (void)card; (void)side; }
+void MonsterEffects_AttackTrapPlayed(int card, int side) { played_card = card; played_side = side; }
+void MonsterEffects_TrackBattleParticipants(int attacker, int defender) { (void)attacker; (void)defender; }
+/* gMonsterEffects is in every save state (src/pc/game/trigger_state.c): the
+ * fields earlier builds had keep their offsets, new ones go at the end. */
+_Static_assert(sizeof(MonsterTrigger) == 4, "a queued trigger's save-state size");
+_Static_assert(offsetof(MonsterEffectsState, count) == 8, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, trap_pending) == 9, "the old pad byte");
+_Static_assert(offsetof(MonsterEffectsState, queue) == 272, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, battle_life) == 486, "save-state layout");
+_Static_assert(offsetof(MonsterEffectsState, battle_abort) == 494, "appended after the old layout");
+_Static_assert(offsetof(MonsterEffectsState, trap_battle_record) == 496, "appended after the old layout");
 int Tables_TrapThreshold(int index, int retail) { (void)index; return retail; }
 s32 Duel_CalcCardStats(DuelCardRecord *card) { (void)card; return attack; }
 
@@ -32,10 +48,12 @@ static void reset(void)
 {
     int i;
     memset(D_801A7AD8, 0, sizeof(D_801A7AD8));
+    memset(D_800E9FF0, 0, sizeof(D_800E9FF0));
     memset(effects, 0, sizeof(effects));
     for (i = 0; i < 1024; i++) thresholds[i] = -1;
     for (i = 0; i < 30; i++) objects[i].field_6A = i;
     for (i = 0; i < 5; i++) D_800907D8[i] = i;
+    replace_id = played_card = played_side = 0;
     D_8009B1D5 = 0;
 }
 static void put(int slot, int id, int effect, int threshold)
@@ -96,6 +114,15 @@ int main(void)
     assert(select_trap() && D_8009B22A == 681);
     thresholds[1] = 65535; attack = 65535;
     assert(select_trap() && D_8009B1B8 == 0);
+    /* A per-card replacement springs under its inherited threshold but does
+     * not select the retail attack-trap handler. It is consumed and queued
+     * for the actual field owner. */
+    reset();
+    put(0, 900, 681, 1500); attack = 1500; replace_id = 900;
+    assert(!select_trap());
+    assert(played_card == 900 && played_side == 0);
+    assert(!(D_801A7AD8[0].flags & DUEL_CARD_FLAG_OCCUPIED));
+    assert(D_800E9FF0[0].rank.traps_triggered == 1);
     puts("trap selection: retail parity, inclusive thresholds, copies and Fake Trap passed");
     return 0;
 }

@@ -5,7 +5,10 @@
 #include "display_object.h"
 #include "func_80025028.h"
 #ifdef MEMORIES_PC
+#include "duel_card_layout.h"
+#include "duel_card_record_lifecycle.h"
 #include "pc/cards/cards.h"
+#include "pc/cards/monster_effects_duel.h"
 #endif
 
 /* Defined rather than declared: the assembler only resolves a small global
@@ -35,6 +38,16 @@ s32 Duel_SelectTrapByCardId(s32 arg0)
             /* A copy of the trap springs as the trap, a trap whose
                "effect" names it as it (cards.h Cards_TrapId). */
             if (Cards_TrapId((s16)record->card_id) == arg0) {
+                if (Cards_CardEffectsReplace(record->card_id)) {
+                    /* It springs under the same condition, but its custom
+                     * work replaces the retail reaction. Return no retail
+                     * trap so the caller keeps its ordinary spell path. */
+                    int owner = (int)(record - D_801A7AD8) / DUEL_CARD_SIDE_RECORD_COUNT;
+                    MonsterEffects_TrapPlayed(record->card_id, owner);
+                    DuelCard_RemoveFromField(record);
+                    D_800E9FF0[owner].rank.traps_triggered++;
+                    return 0;
+                }
 #else
             if ((s16) record->card_id == arg0) {
 #endif

@@ -115,6 +115,13 @@ static HmCard card_info(int id)
     stats = (unsigned)gDuel_adwCardStats[id - 1];
     c.id = id; c.effect = Cards_EffectId(id);
     c.type = (stats >> CARD_STAT_TYPE_SHIFT) & CARD_STAT_TYPE_MASK;
+    /* A replacement Magic/Trap has data-defined behavior.  Its retail
+     * effect is only a trigger/compatibility identity; plan it as a retail
+     * spell or trap only when the mod explicitly supplied that analogue. */
+    if (c.type == CARD_TYPE_MAGIC || c.type == CARD_TYPE_TRAP) {
+        int ai = Cards_AiId(id);
+        c.effect = ai > 0 ? ai : 0;
+    }
     c.attack = (stats & CARD_STAT_VALUE_MASK) * CARD_STAT_SCALE;
     c.defense = ((stats >> CARD_STAT_DEFENSE_SHIFT) & CARD_STAT_VALUE_MASK) * CARD_STAT_SCALE;
     c.star = (stats >> CARD_STAT_GUARDIAN_STAR_1_SHIFT) & 15;

@@ -118,10 +118,24 @@ void DuelEffect_StartCardEffect(int value, int flag)
 void DuelEffect_StartCardEffect(int value, int flag)
 {
     MemoriesModEvent event = {MEMORIES_EVENT_EFFECT, MEMORIES_BEFORE, 0, 0, 0, 0, 0};
+    int card = value;
+    const MonsterEffect *card_effects;
     event.a = value; event.b = flag;
     Mods_Dispatch(&event);
 
     if (!event.handled) {
+        /* `value` is still the card that was played here, before the retail
+         * dispatcher maps it through Cards_EffectId.  Queue its custom work
+         * once, on the first of the retail effect's two dispatch calls. */
+        if (!start_retail && !flag && Cards_CardEffects(card, &card_effects))
+            MonsterEffects_CardPlayed(card, D_8009B1D5);
+        /* The controller enters this dispatcher for both handlers. A
+         * replacement owns both phases; custom effects themselves were
+         * queued above only for the first one. */
+        if (!start_retail && Cards_CardEffectsReplace(card)) {
+            event.phase = MEMORIES_AFTER; Mods_Dispatch(&event);
+            return;
+        }
         DuelEffect_StartCardEffectRetail(event.a, event.b);
         /* A ritual takes its tributes off the field: not destroyed. */
         if (gDuel_wCardEffectFlags &&

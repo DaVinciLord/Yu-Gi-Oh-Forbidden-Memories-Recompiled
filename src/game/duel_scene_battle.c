@@ -136,6 +136,26 @@ void DuelScene_UpdateBattle(void)
     u8 *pw;
     DuelEffectResourceRecord *effects;
 
+#ifdef MEMORIES_PC
+    /* An attack trap's card_effects can remove a participant during the
+     * battle: a replacement as the scene starts, an added effect after the
+     * trap's presentation. Its field object was released with it, so use
+     * the explicit marker rather than dereferencing it here. */
+    if (gDuel_wSceneStateFlags & 0x8000) {
+        int abort_mask = MonsterEffects_BattleAbortMask();
+        if (abort_mask) {
+            /* Clear only the stale battle slots; state 11 recreates the
+             * surviving field cards before releasing their battle objects. */
+            if (abort_mask & 1) D_800E9EF0[0] = 0;
+            if (abort_mask & 2) D_800E9EF0[1] = 0;
+            /* Before the presentation (state 1) there are no stat panels
+             * in slots 2 and 3 for the retail cleanup to key on: bit 0x10
+             * says so. After it, the retail cleanup fades them out. */
+            D_8009B174 = D_800E9EF0[2] || D_800E9EF0[3] ? 0xB : 0x1B;
+        }
+    }
+#endif
+
     if (!(gDuel_wSceneStateFlags & 0x8000)) {
         big = 0x48000;
         gDuel_wSceneStateFlags |= 0x8000;
@@ -177,6 +197,10 @@ void DuelScene_UpdateBattle(void)
         } else {
             D_8009B229 = 0;
         }
+#ifdef MEMORIES_PC
+        MonsterEffects_TrackBattleParticipants(D_800E9EF0[0]->field_6A,
+                                               D_800E9EF0[1] ? D_800E9EF0[1]->field_6A : -1);
+#endif
         if (func_8001F0D0((u8 *)D_800E9EF0[0]) != 0) {
             D_8009B229 = 0;
         }
@@ -722,7 +746,14 @@ void DuelScene_UpdateBattle(void)
     case 11:
         if (!(D_8009B174 & 0x80)) {
             D_8009B174 |= 0x80;
+#ifdef MEMORIES_PC
+            /* Bit 0x10 is the replacement-trap abort (above): the battle
+             * never reached its presentation, so slots 2 and 3 were not
+             * filled, and a removed participant's slot was cleared. */
+            if (((D_8009B174 & 0x10) || D_800E9EF0[2] != 0) && D_800E9EF0[0] != 0) {
+#else
             if (D_800E9EF0[2] != 0) {
+#endif
                 func_80024D34(D_800E9EF0[0]->field_6A, D_800E9EF0[0]->field_6B);
                 left = &D_801A7AD8[D_800E9EF0[0]->field_6A];
                 left->flags |= (D_8009B178[0] & 0xA00) | 0x4000;
@@ -732,7 +763,11 @@ void DuelScene_UpdateBattle(void)
 #endif
                 Duel_ApplyCardObjectFlags((DuelCardDisplayObject *)left->object);
             }
+#ifdef MEMORIES_PC
+            if ((D_8009B174 & 0x10) || D_800E9EF0[3] != 0) {
+#else
             if (D_800E9EF0[3] != 0) {
+#endif
                 if (D_800E9EF0[1] != 0) {
                     func_80024D34(D_800E9EF0[1]->field_6A, D_800E9EF0[1]->field_6B);
                     left = &D_801A7AD8[D_800E9EF0[1]->field_6A];

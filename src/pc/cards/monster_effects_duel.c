@@ -8,6 +8,7 @@
 #include "pc/debug/log.h"
 #include "game/card_constants.h"
 #include "game/duel_card.h"
+#include "game/duel_card_record_lifecycle.h"
 #include "game/duel_grid.h"
 #include "game/duel_side_state.h"
 #include "game/duel_scene_state.h"
@@ -99,6 +100,86 @@ static void queue(int card, int record, int when)
     }
 }
 
+void MonsterEffects_CardPlayed(int card, int side)
+{
+    const MonsterEffect *effects;
+    int n = Cards_CardEffects(card, &effects), i;
+    /* The first monster-zone record of the owner's side (records are 15 a
+     * side: owner()) stands in as the source, giving the shared target and
+     * LP helpers the owning side. CardEffects_Read rejects the targets that
+     * would take this made-up source for a real monster. */
+    int record = side * 15 + 5;
+    for (i = 0; i < n; i++) {
+        if (S.count == MONSTER_QUEUE_MAX) {
+            LOG(LOG_DUEL_EFFECTS, "card effects: queue full: card %d's effect dropped", card);
+            return;
+        }
+        S.queue[S.count].card = (short)card;
+        S.queue[S.count].record = (unsigned char)record;
+        S.queue[S.count].effect = (unsigned char)(i | MONSTER_TRIGGER_CARD_EFFECT);
+        S.count++;
+    }
+}
+
+void MonsterEffects_TrapPlayed(int card, int side)
+{
+    MonsterEffects_CardPlayed(card, side);
+}
+
+void MonsterEffects_AttackTrapPlayed(int card, int side)
+{
+    const MonsterEffect *effects;
+    /* Its effects run within the battle: hold the battle's own triggers
+     * until they are done, and cancel it if they took a participant. */
+    if (Cards_CardEffects(card, &effects)) S.trap_pending = 1;
+    MonsterEffects_CardPlayed(card, side);
+}
+
+void MonsterEffects_TrapPresented(int card, int side)
+{
+    /* The same presentation serves the battle's attack traps and the
+     * traps that answer a card put down or a magic card. */
+    if (phase() == PHASE_BATTLE) MonsterEffects_AttackTrapPlayed(card, side);
+    else MonsterEffects_CardPlayed(card, side);
+}
+
+void MonsterEffects_TrackBattleParticipants(int attacker, int defender)
+{
+    S.trap_battle_record[0] = (short)attacker;
+    S.trap_battle_record[1] = (short)defender;
+}
+
+int MonsterEffects_BattleAbortMask(void)
+{
+    int aborted = S.battle_abort;
+    S.battle_abort = 0;
+    return aborted;
+}
+
+static int finish_attack_trap(void)
+{
+    int i, abort = 0;
+
+    if (!S.trap_pending) return 0;
+    /* Replacement traps run before combat. Once their custom work has
+     * drained, cancel that combat only if it actually removed one of its
+     * original participants; heals and boosts leave it to proceed. */
+    for (i = 0; i < 2; i++) {
+        int record = S.trap_battle_record[i];
+        if (record >= 0 && record < MONSTER_RECORDS &&
+            !(D_801A7AD8[record].flags & DUEL_CARD_FLAG_OCCUPIED)) {
+            S.battle_abort |= 1 << i;
+            abort = 1;
+        }
+    }
+    S.trap_pending = 0;
+    /* A harmless replacement only postpones combat while its own queue is
+     * handled. Now that it is safe to continue, run the participants' normal
+     * combat triggers once; the abort path has no combat to resume. */
+    if (!abort) MonsterEffects_Battle();
+    return S.count || S.battle_life_count;
+}
+
 /* MEMORIES_EVENT_MONSTER, before: whether a code mod took the occasion
  * (the card's own effects are then skipped). */
 static int announce(int card, int record, int when, unsigned phase)
@@ -160,6 +241,15 @@ static int times(const MonsterEffect *effect, int source)
 }
 
 static int clamp(int value, int low, int high) { return value < low ? low : value > high ? high : value; }
+
+/* A spell/trap has no source monster. Its supported LP targets name the
+ * owner or the other duelist explicitly; monster effects retain their
+ * original owner/heal and opponent/damage meanings. */
+static int life_side(const MonsterEffect *effect, int side, int card_effect)
+{
+    if (!card_effect) return effect->action == MONSTER_DO_HEAL ? side : side ^ 1;
+    return effect->target == MONSTER_TARGET_OPPONENT ? side ^ 1 : side;
+}
 
 /* A lasting boost: the modifiers equips use (both stats share
  * stat_modifier; defense_modifier is DEF's own on top), kept within what
@@ -288,11 +378,13 @@ static int resolve(void)
 {
     MonsterTrigger trigger = S.queue[0];
     const MonsterEffect *effects, *effect;
-    int n = Cards_MonsterEffects(trigger.card, &effects), side = owner(trigger.record), record, hit = 0, count;
+    int card_effect = trigger.effect & MONSTER_TRIGGER_CARD_EFFECT, index = trigger.effect & ~MONSTER_TRIGGER_CARD_EFFECT;
+    int n = card_effect ? Cards_CardEffects(trigger.card, &effects) : Cards_MonsterEffects(trigger.card, &effects);
+    int side = owner(trigger.record), record, hit = 0, count;
     memmove(S.queue, S.queue + 1, (size_t)(--S.count) * sizeof(S.queue[0]));
-    if (trigger.effect >= n) return 0;
-    effect = &effects[trigger.effect];
-    trace("resolving", trigger.card, trigger.record, effect);
+    if (index >= n) return 0;
+    effect = &effects[index];
+    trace(card_effect ? "resolving card" : "resolving", trigger.card, trigger.record, effect);
     S.chain++;
     count = times(effect, trigger.record);
     if (effect->each) LOG(LOG_DUEL_EFFECTS, "monster effects: for each: %d counted", count);
@@ -322,20 +414,35 @@ static int resolve(void)
         SD_SEPlayFull(SE_BOOST);
         break;
     case MONSTER_DO_HEAL:
-        return count ? life_effect(side, effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, card_effect), effect->amount * count) : 0;
     case MONSTER_DO_DAMAGE:
-        return count ? life_effect(side ^ 1, -effect->amount * count) : 0;
+        return count ? life_effect(life_side(effect, side, card_effect), -effect->amount * count) : 0;
     case MONSTER_DO_DESTROY:
         /* Crush Card's removal, on the monsters chosen here
          * (MonsterEffects_RemovalTakes): it takes the other side's, as
          * its owner plays it. */
         S.destroy_mask = 0;
         for (record = 0; record < MONSTER_RECORDS; record++) {
-            const DuelCardRecord *card = &D_801A7AD8[record];
-            if (!monster_zone(record) || owner(record) == side || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
-            if (reaches(effect, trigger.record, record, card->card_id)) S.destroy_mask |= 1u << record;
+            DuelCardRecord *card = &D_801A7AD8[record];
+            if (!monster_zone(record) || !(card->flags & DUEL_CARD_FLAG_OCCUPIED)) continue;
+            if (!reaches(effect, trigger.record, record, card->card_id)) continue;
+            /* Crush Card only walks the opposing physical row.  A data
+             * effect which explicitly names its owner (or all monsters)
+             * removes that row here; the retail sequencer still presents
+             * the opposing row below. */
+            if (card_effect && owner(record) == side) {
+                DuelCard_RemoveFromField(card);
+                hit = 1;
+            } else {
+                S.destroy_mask |= 1u << record;
+            }
         }
-        if (!S.destroy_mask) return 0;
+        if (!S.destroy_mask) {
+            if (!hit) return 0;
+            SD_SEPlayFull(SE_BOOST);
+            S.pause = PAUSE_FRAMES;
+            return 1;
+        }
         if (side != D_8009B1D5) {
             S.swapped = 1;
             S.saved_turn = D_8009B1D5;
@@ -437,6 +544,10 @@ int MonsterEffects_Update(void)
         S.life_pending = 0;
         change_life(S.life_side, S.life_amount, 0);
     }
+    /* A replacement trap only suppresses the battle where it sprang.  Do
+     * not leave that marker behind after its queue, magic handler, splash or
+     * pause has drained. */
+    if (!S.count && !S.running && !S.life_pending && !S.pause) finish_attack_trap();
     if (S.pause) {
         S.pause--;
         return 1;
@@ -453,7 +564,8 @@ int MonsterEffects_Update(void)
      * one the field is not settled (the hand lifts a field monster for a
      * fusion frames before placement takes it). Every way back to them --
      * a card put down, a battle, a card's effect, a new turn -- starts one. */
-    if ((now != PHASE_HAND && now != PHASE_FIELD) || (gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) ||
+    if (((now != PHASE_HAND && now != PHASE_FIELD) && !S.count) ||
+        ((gDuel_wSceneStateFlags & DUEL_SCENE_FLAG_INITIALIZED) && !(now == PHASE_BATTLE && S.count)) ||
         gDuel_bEffectState || gDuel_wCardEffectFlags || gDuel_bQuitDialogState)
         return 0;
     /* A side out of LP: the field phase ends the duel; no more effects. */
@@ -470,6 +582,15 @@ int MonsterEffects_Update(void)
         look();
         S.count = 0;
         return 0;
+    }
+    /* A trap springs in battle. Its queued card effects may run there, but
+     * that is not a stable field boundary, so do not infer summons,
+     * destruction or draw triggers from this intermediate board. */
+    if (now != PHASE_HAND && now != PHASE_FIELD) {
+        waiting = 0;
+        while (S.count && !waiting) waiting = resolve();
+        if (!waiting && !S.count && finish_attack_trap()) return 1;
+        return waiting;
     }
     look();
     /* A code mod may have started a card effect of its own for what it
@@ -535,7 +656,7 @@ void MonsterEffects_Battle(void)
     const DisplayObject *attacker = (const DisplayObject *)D_800E9EF0[0];
     const DisplayObject *defender = (const DisplayObject *)D_800E9EF0[1];
     int records[2], i, played = 0;
-    if (!S.ready || D_8009B22A || !attacker) return;
+    if (!S.ready || D_8009B22A || S.trap_pending || !attacker) return;
     records[0] = attacker->field_6A;
     records[1] = defender ? defender->field_6A : -1;
     /* A face-down defender is flipped by the battle: as Yu-Gi-Oh! has it,

@@ -71,7 +71,7 @@ extern void Library_UpdateCardUsedFlag(int flag);
 
 static char *identities[CARD_TABLE_ID_END];
 static const JsonValue *definitions[CARD_TABLE_ID_END];
-static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END];
+static unsigned short model_ids[CARD_TABLE_ID_END], effect_ids[CARD_TABLE_ID_END], ai_effect_ids[CARD_TABLE_ID_END];
 /* Threshold plus one: zero inherits the effect's global/retail threshold. */
 static unsigned int trap_thresholds[CARD_TABLE_ID_END];
 static unsigned char not_exodia[EXODIA_PIECE_COUNT];  /* a replaced piece without Exodia's rules */
@@ -104,11 +104,19 @@ int Cards_HasTag(int id, const char *tag)
 /* "monster_effects" (monster_effects.h): an entry's list, shared by its cards. */
 static const MonsterEffect *monster_effects[CARD_TABLE_ID_END];
 static unsigned char monster_effect_counts[CARD_TABLE_ID_END];
+static const MonsterEffect *card_effects[CARD_TABLE_ID_END];
+static unsigned char card_effect_counts[CARD_TABLE_ID_END], card_effect_replaces[CARD_TABLE_ID_END];
 int Cards_MonsterEffects(int id, const MonsterEffect **effects)
 {
     *effects = Cards_Valid(id) ? monster_effects[id] : NULL;
     return *effects ? monster_effect_counts[id] : 0;
 }
+int Cards_CardEffects(int id, const MonsterEffect **effects)
+{
+    *effects = Cards_Valid(id) ? card_effects[id] : NULL;
+    return *effects ? card_effect_counts[id] : 0;
+}
+int Cards_CardEffectsReplace(int id) { return Cards_Valid(id) && card_effect_replaces[id]; }
 /* Explicit secondary fusion groups for modded/replaced cards. Zero means inherit the retail base. */
 static unsigned int fusion_groups[CARD_TABLE_ID_END];
 static unsigned char has_fusion_groups[CARD_TABLE_ID_END];
@@ -1025,6 +1033,13 @@ int Cards_KindChanged(int id)
 int Cards_AiId(int id)
 {
     int as = Cards_EffectId(id);
+    /* A replacement's actual behavior is data-defined.  It must opt into a
+     * retail analogue for the script CPU; otherwise no script is allowed to
+     * mistake it for its old spell or trap effect. */
+    if (Cards_CardEffectsReplace(id)) {
+        if (!ai_effect_ids[id]) return -1;
+        as = ai_effect_ids[id];
+    }
     return Cards_Valid(id) && kind(Cards_Type(id)) == kind(Cards_RetailType(as)) ? as : -1;
 }
 
@@ -1173,6 +1188,10 @@ static void add_entry(const char *mod, const char *directory, int index, const J
     MonsterEffect read_effects[MONSTER_EFFECTS_MAX];
     MonsterEffect *own_effects = NULL;
     int effect_count;
+    MonsterEffect read_card_effects[MONSTER_EFFECTS_MAX];
+    MonsterEffect *own_card_effects = NULL;
+    int card_effect_count, card_effect_replace = 0, card_effect_mode_given = 0;
+    int ai_effect = 0, ai_effect_given = 0, spell_or_trap;
     unsigned int trap_threshold;
     unsigned char level_attr, frame;
     unsigned int tags;
@@ -1216,6 +1235,30 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         own_effects = malloc((size_t)effect_count * sizeof(*own_effects));
         if (own_effects) memcpy(own_effects, read_effects, (size_t)effect_count * sizeof(*own_effects));
         else effect_count = 0;
+    }
+    /* A spell/trap's data-defined actions use the monster-effect action
+     * vocabulary, but occur as the card is played or springs.  By default
+     * they run after its normal (possibly aliased) retail effect; `replace`
+     * suppresses that effect. */
+    card_effect_count = CardEffects_Read(mod, index, Json_Member(entry, "card_effects"), read_card_effects);
+    if (card_effect_count > 0) {
+        own_card_effects = malloc((size_t)card_effect_count * sizeof(*own_card_effects));
+        if (own_card_effects) memcpy(own_card_effects, read_card_effects,
+                                     (size_t)card_effect_count * sizeof(*own_card_effects));
+        else card_effect_count = 0;
+    }
+    if (Json_Member(entry, "card_effects_mode")) {
+        const char *mode = Json_String(Json_Member(entry, "card_effects_mode"), NULL);
+        if (!mode || (strcmp(mode, "add") && strcmp(mode, "replace")))
+            Mods_Note(mod, "cards[%d]: \"card_effects_mode\" must be add or replace", index);
+        else {
+            card_effect_replace = !strcmp(mode, "replace");
+            card_effect_mode_given = 1;
+        }
+    }
+    if (Json_Member(entry, "ai_effect")) {
+        ai_effect = Cards_Reference(Json_Member(entry, "ai_effect"));
+        ai_effect_given = 1;
     }
     /* What the entry leaves out is the base's. */
     stats = (unsigned)gDuel_adwCardStats[base - 1];
@@ -1466,6 +1509,41 @@ static void add_entry(const char *mod, const char *directory, int index, const J
         } else if (!replace) {
             monster_effects[id] = monster_effects[base];
             monster_effect_counts[id] = monster_effect_counts[base];
+        }
+        /* Only a Magic or Trap card is played or springs: on any other
+         * kind the three are refused (a monster that inherited them from
+         * a Magic base drops them), so its AI identity stays its own. */
+        spell_or_trap = (int)((stats >> 26) & 0x1F) == CARD_TYPE_MAGIC ||
+                        (int)((stats >> 26) & 0x1F) == CARD_TYPE_TRAP;
+        if (!spell_or_trap) {
+            if (card_effect_count >= 0 || card_effect_mode_given || ai_effect_given)
+                Mods_Note(mod, "cards[%d]: \"card_effects\", \"card_effects_mode\" and \"ai_effect\" "
+                          "only work for a Magic or Trap card", index);
+            free(own_card_effects);
+            own_card_effects = NULL;
+            card_effect_count = 0;
+            card_effect_replace = card_effect_mode_given = ai_effect_given = 0;
+            ai_effect_ids[id] = 0;
+        }
+        if (card_effect_count >= 0) {
+            card_effects[id] = own_card_effects;
+            card_effect_counts[id] = (unsigned char)card_effect_count;
+            card_effect_replaces[id] = (unsigned char)card_effect_replace;
+        } else if (!replace && spell_or_trap) {
+            card_effects[id] = card_effects[base];
+            card_effect_counts[id] = card_effect_counts[base];
+            card_effect_replaces[id] = card_effect_replaces[base];
+        }
+        if (card_effect_count < 0 && card_effect_mode_given)
+            card_effect_replaces[id] = (unsigned char)card_effect_replace;
+        if (ai_effect_given) {
+            if (ai_effect < 1 || ai_effect > CARD_COUNT ||
+                Cards_RetailType(ai_effect) != (int)((stats >> 26) & 0x1F))
+                Mods_Note(mod, "cards[%d]: \"ai_effect\" must name a retail card of this card's type", index);
+            else
+                ai_effect_ids[id] = (unsigned short)ai_effect;
+        } else if (!replace && spell_or_trap) {
+            ai_effect_ids[id] = ai_effect_ids[base];
         }
         trap_thresholds[id] = trap_threshold;
         fusion_groups[id] = entry_fusion_groups;
