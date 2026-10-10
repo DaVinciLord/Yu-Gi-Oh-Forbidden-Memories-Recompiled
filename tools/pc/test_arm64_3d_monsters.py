@@ -2,6 +2,7 @@
 """Retail-disc regression: packaged 3D Monsters loads and renders on the field."""
 import argparse
 import json
+import re
 import shutil
 import statistics
 import struct
@@ -11,6 +12,29 @@ from pathlib import Path
 from yfm_control import Game
 
 ROOT = Path(__file__).resolve().parents[2]
+STRESS_SLOTS = (*range(5, 10), *range(20, 25))
+STRESS_CARDS = (613, 1, 425, 11, 2, 3, 4, 5, 6, 7)
+
+
+def field_records(original, cards, slots=STRESS_SLOTS):
+    records = bytearray(original)
+    for slot in STRESS_SLOTS:
+        struct.pack_into('<h', records, slot * 28 + 12, 0)
+        struct.pack_into('<H', records, slot * 28 + 22, 0)
+    for slot, card in zip(slots, cards, strict=True):
+        struct.pack_into('<h', records, slot * 28 + 12, card)
+        struct.pack_into('<H', records, slot * 28 + 22, 0x8000)
+    return records
+
+
+def check_models(log, cards):
+    loaded = {
+        int(card) for card, units, parts in re.findall(
+            r'card (\d+) stance 0 loaded in \d+ us: (\d+) units, (\d+) parts', log
+        ) if int(units) > 0 and int(parts) > 0
+    }
+    missing = set(cards) - loaded
+    assert not missing, f'models missing or empty: {sorted(missing)}'
 
 
 def main():
@@ -40,6 +64,7 @@ def main():
     if args.window:
         env.update(MEMORIES_INTERNAL_SCALE='4', MEMORIES_HD_TEXT='1', MEMORIES_NO_AUDIO='1')
     pictures = []
+    stress_pictures = {}
     for enabled in (0, 1):
         folder = args.output / ('on' if enabled else 'off')
         # Same real fusion and field camera, with only this mod changing.
@@ -57,18 +82,17 @@ def main():
             game.press('circle', after=90)
             assert game.u16(0x800F284C) < 512, 'camera did not return above the field'
             pictures.append(game.shot('terrain.png').read_bytes())
-            if enabled and args.stress:
+            if args.stress:
                 original = game.peek('D_801A7AD8', 30 * 28)
-                slots = [*range(5, 10), *range(20, 25)]
-                cards = [613, 1, 425, 11, 2, 3, 4, 5, 6, 7]
+                scene_pictures = {}
                 timings = []
                 for count in (1, 3, 4, 5, 10):
-                    records = bytearray(original)
-                    for index, slot in enumerate(slots):
-                        struct.pack_into('<h', records, slot * 28 + 12, cards[index] if index < count else 0)
-                        struct.pack_into('<H', records, slot * 28 + 22, 0x8000 if index < count else 0)
-                    game.poke('D_801A7AD8', records)
+                    cards = STRESS_CARDS[:count]
+                    game.poke('D_801A7AD8', field_records(original, cards, STRESS_SLOTS[:count]))
+                    log_start = (folder / 'game.log').stat().st_size
                     game.step(30)  # exclude initial disc reads from the steady measurement
+                    if enabled:
+                        check_models((folder / 'game.log').read_text(), cards)
                     samples = []
                     for _ in range(args.timing_batches):
                         started = time.perf_counter()
@@ -78,14 +102,33 @@ def main():
                     # percentiles or the game's paced FPS counter.
                     result = {'monsters': count, 'ms_per_frame': statistics.median(samples),
                               'batch_ms_per_frame': samples}
-                    timings.append(result)
-                    print(result, flush=True)
-                    game.shot(f'field-{count}.png')
-                (folder / 'timings.json').write_text(json.dumps(timings, indent=2) + '\n')
+                    if enabled:
+                        timings.append(result)
+                        print(result, flush=True)
+                        with (folder / 'game.log').open('rb') as log:
+                            log.seek(log_start)
+                            scene_log = log.read().decode('utf-8')
+                        assert 'left out:' not in scene_log, f'packets dropped in the {count}-model scene'
+                    scene_pictures[f'field-{count}'] = game.shot(f'field-{count}.png').read_bytes()
+                # Prove each model changes the picture on its own, rather than
+                # letting one visible monster mask another missing from a group.
+                # Both runs advance the same scenes and VBlanks. These checks
+                # follow all timing batches so they do not warm the model cache.
+                for card in STRESS_CARDS:
+                    game.poke('D_801A7AD8', field_records(original, (card,), (7,)))
+                    game.step(30)
+                    scene_pictures[f'model-{card}'] = game.shot(f'model-{card}.png').read_bytes()
+                stress_pictures[enabled] = scene_pictures
+                if enabled:
+                    (folder / 'timings.json').write_text(json.dumps(timings, indent=2) + '\n')
         log = (folder / 'game.log').read_text()
         loaded = 'card 613 stance 0 loaded' in log
         assert loaded == bool(enabled), f'3D model load differs from mod state: {folder}'
     assert pictures[0] != pictures[1], 'enabling 3D Monsters did not change the field image'
+    if args.stress:
+        for scene, picture in stress_pictures[1].items():
+            assert picture != stress_pictures[0][scene], f'3D Monsters did not change the {scene} image'
+        print('Stress: all ten models loaded with geometry; group and individual images differ from mod-off')
     print(f'3D Monsters: real fusion, disc model load and field image change passed; {args.output}')
 
 

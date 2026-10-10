@@ -5,6 +5,7 @@
 #include "pc/platform/menu.h"
 #include "pc/debug/log.h"
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -13,6 +14,7 @@
 
 static int saves, loads, notices, told, loaded_slot, user_failure, jump_on_load;
 static char saved_path[1024], loaded_path[1024];
+static int reported_error;
 static jmp_buf resumed;
 int Paths_User(char *out, size_t size, const char *relative)
 {
@@ -20,15 +22,19 @@ int Paths_User(char *out, size_t size, const char *relative)
     return user_failure;
 }
 int Paths_MakeDirs(const char *path) { assert(path && *path); return 0; }
+void Paths_WriteBegin(void) { errno = 0; }
 const char *Paths_WriteError(char *out, size_t size, const char *path)
 {
-    snprintf(out, size, "%s: write refused", path);
+    reported_error = errno;
+    snprintf(out, size, "%s: %s", path,
+             errno == ENAMETOOLONG ? "path too long" : "write refused");
     return out;
 }
 void Menu_ShowNotice(const char *title, const char *text, const char *const *buttons,
                      int count, int focus, void (*chosen)(int, int *))
 {
-    assert(!strcmp(title, "Save state not saved") && strstr(text, "write refused"));
+    assert(!strcmp(title, "Save state not saved"));
+    assert(strstr(text, "write refused") || strstr(text, "path too long"));
     assert(count == 1 && !strcmp(buttons[0], "OK") && !focus && !chosen);
     ++notices;
 }
@@ -148,13 +154,23 @@ int main(void)
     {
         char long_path[2048];
         MemoriesStateRequests invalid = MEMORIES_STATE_REQUESTS_INIT;
-        int before = saves, before_loads = loads;
+        int before = saves, before_loads = loads, before_notices = notices;
         memset(long_path, 'x', sizeof(long_path) - 1); long_path[sizeof(long_path) - 1] = 0;
         setenv("MEMORIES_STATE_DIR", long_path, 1);
         setenv("MEMORIES_LOAD_STATE", long_path, 1);
         Memories_StateQueue(&invalid, 1, 3);
         Memories_StateProcess(&invalid, 30, &actions);
         assert(saves == before && loads == before_loads);
+        assert(notices == before_notices + 1 && reported_error == ENAMETOOLONG);
+        Memories_StateProcess(&invalid, 31, &actions);
+        assert(notices == before_notices + 1 && !invalid.requested);
+        /* Background autosaves refuse the same path without a modal notice. */
+        setenv("MEMORIES_AUTOSAVE_DIR", long_path, 1);
+        setenv("MEMORIES_AUTOSAVE", "1", 1);
+        MemoriesStateRequests automatic = MEMORIES_STATE_REQUESTS_INIT;
+        Memories_StateProcess(&automatic, 30, &actions);
+        Memories_StateProcess(&automatic, 90, &actions);
+        assert(saves == before && notices == before_notices + 1);
     }
     assert(Memories_StateSlotFromPath("/user/slot2147483647.state") == INT_MAX);
     assert(Memories_StateSlotFromPath("C:\\states\\slot7.state") == 7);
@@ -162,8 +178,12 @@ int main(void)
     assert(!Memories_StateSlotFromPath("slot0.state"));
     assert(!Memories_StateSlotFromPath("slot1.state.extra"));
     assert(!Memories_StateSlotFromPath("slot-1.state"));
-    assert(Memories_StateSaveFailure("/refused.state", 0) == -1 && !notices);
-    assert(Memories_StateSaveFailure("/refused.state", 1) == -1 && notices == 1);
+    {
+        int before = notices;
+        errno = EACCES;
+        assert(Memories_StateSaveFailure("/refused.state", 0) == -1 && notices == before);
+        assert(Memories_StateSaveFailure("/refused.state", 1) == -1 && notices == before + 1);
+    }
     puts("Shared state requests: startup resume, scripted save, slots, autosave rotation and failures passed");
     return 0;
 }

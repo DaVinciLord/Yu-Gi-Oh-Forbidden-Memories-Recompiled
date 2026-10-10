@@ -3,6 +3,7 @@
 #include "pc/platform/paths.h"
 #include "pc/platform/menu.h"
 #include "pc/debug/log.h"
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,13 +24,17 @@ static int state_path(char *out, size_t size, const char *setting, const char *n
     if (!directory && !strcmp(setting, "MEMORIES_AUTOSAVE_DIR")) directory = getenv("MEMORIES_STATE_DIR");
     if (!directory) {
         length = snprintf(relative, sizeof(relative), "states/%s", name);
-        if (length < 0 || (size_t)length >= sizeof(relative)) return -1;
+        if (length < 0 || (size_t)length >= sizeof(relative)) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
         if (!Paths_User(out, size, relative)) return 0;
         directory = ".";
     }
     length = snprintf(out, size, "%s/%s", directory, name);
     if (length < 0 || (size_t)length >= size) {
         fprintf(stderr, "memories-pc: save-state path is too long\n");
+        errno = ENAMETOOLONG;
         return -1;
     }
     Paths_MakeDirs(directory);
@@ -127,15 +132,19 @@ void Memories_StateProcess(MemoriesStateRequests *requests, unsigned frames,
         requests->autosave_frame = frames;
         snprintf(name, sizeof(name), "auto%u.state", requests->autosave_index % 3 + 1);
         ++requests->autosave_index;
-        if (!state_path(path, sizeof(path), "MEMORIES_AUTOSAVE_DIR", name) && !actions->save(path, 0)) LOG(LOG_STATE, "autosave %s at frame %u", path, frames);
+        if (!state_path(path, sizeof(path), "MEMORIES_AUTOSAVE_DIR", name) &&
+            !actions->save(path, 0)) {
+            LOG(LOG_STATE, "autosave %s at frame %u", path, frames);
+        }
     }
     what = __atomic_exchange_n(&requests->requested, 0, __ATOMIC_SEQ_CST);
     if (what == 1 || what == 2) {
         int slot = requests->slot;
         snprintf(name, sizeof(name), "slot%d.state", slot);
+        if (what == 1) Paths_WriteBegin();
         if (!state_path(path, sizeof(path), "MEMORIES_STATE_DIR", name)) {
             if (what == 1) actions->save(path, 1);
             else actions->load(path, slot);
-        }
+        } else if (what == 1) Memories_StateSaveFailure(path, 1);
     }
 }

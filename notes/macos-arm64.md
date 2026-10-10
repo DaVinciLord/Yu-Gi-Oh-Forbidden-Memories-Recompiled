@@ -96,8 +96,9 @@ shares address tables and Darwin frontend flags with the mod builder; mods
 retain their own ABI validation, registration/cleanup and dynamic linkage.
 The LLVM pass keeps validation, pinning, instruction preparation/lowering,
 hooks and global registration as ordered phases. Host renderer allocations
-remain outside guest heaps. Packet-chain flattening uses one shared algorithm;
-fixed and translated callers supply their own address resolvers.
+remain outside guest heaps. The translated mod flattens packet chains through
+a native adapter and a resolver-independent helper. The fixed backend retains
+its original loop; helper tests cover its packet ordering and length bits.
 
 The isolated function runners compile their own current C sources through
 `guest_test_ir.py`. Function selection uses LLVM definitions and preserves
@@ -164,7 +165,11 @@ and loader checks.
 Add `--stress --window --texture-mod /path/to/hd-mod --output tmp/3d-stress-new`
 to measure 1, 3, 4, 5 and 10 different retail models in a 4x window with HD.
 This deliberately changes only the isolated duel's field records. Inspect the
-field captures alongside `on/timings.json`; the timings exclude initial model
+field captures alongside `on/timings.json`. Each stress scene checks that its
+expected models loaded with nonempty geometry and that no packets were dropped.
+The same scenes run with the mod disabled for image comparisons. After timing,
+each of the ten models also appears alone in the central player zone; its image
+must differ from the corresponding mod-off image. The timings exclude initial model
 reads and client waits between frames, and are processing times rather than
 normal-play FPS. Each scene measures five batches of 120 frames and reports
 the median alongside every batch in `on/timings.json`; `--timing-batches`

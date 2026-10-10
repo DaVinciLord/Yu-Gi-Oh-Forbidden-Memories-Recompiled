@@ -189,9 +189,15 @@ int Memories_NativeStateSave(const char *path)
     char partial[1024];
     MemoriesState state = {0, NULL, NULL, 0};
     MemoriesStateField field;
-    int failed;
-    if (!boundary()) return -2;
-    if (!path || snprintf(partial, sizeof(partial), "%s.partial", path) >= (int)sizeof(partial) || executable(&entry)) return -1;
+    int failed, error = 0, length;
+    if (!boundary()) { errno = EINVAL; return -2; }
+    if (!path) { errno = EINVAL; return -1; }
+    length = snprintf(partial, sizeof(partial), "%s.partial", path);
+    if (length < 0 || (size_t)length >= sizeof(partial)) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    if (executable(&entry)) { errno = EINVAL; return -1; }
     entry.context = Memories_Arm64Boundary;
     entry.stack_base = (uintptr_t)game_stack;
     entry.stack_size = STACK_SIZE;
@@ -205,17 +211,32 @@ int Memories_NativeStateSave(const char *path)
     field = (MemoriesStateField){GuestRuntime_Memory(), sizeof(MemoriesMemory)};
     Memories_StateChunk(&state, "memory", &field, 1);
     failed = Memories_NativeMemorySave(&state);
+    if (failed) error = errno ? errno : EIO;
     Memories_StateSubsystems(&state);
     field = (MemoriesStateField){(void *)(uintptr_t)entry.context.sp,
                                 (uintptr_t)game_stack + STACK_SIZE - entry.context.sp};
     Memories_StateChunk(&state, "arm64-stack", &field, 1);
-    if (Memories_StateSeal(&state)) failed = -1;
+    if (Memories_StateSeal(&state) && !failed) {
+        failed = -1;
+        error = errno ? errno : EIO;
+    }
+    if (ferror(state.file) && !failed) {
+        failed = -1;
+        error = errno ? errno : EIO;
+    }
     hold(0);
-    if (ferror(state.file)) failed = -1;
-    if (fclose(state.file)) failed = -1;
-    if (!failed && rename(partial, path)) failed = -1;
-    if (failed) remove(partial);
-    else fprintf(stderr, "memories-pc: ARM64 state saved: %s\n", path);
+    if (fclose(state.file) && !failed) {
+        failed = -1;
+        error = errno ? errno : EIO;
+    }
+    if (!failed && rename(partial, path)) {
+        failed = -1;
+        error = errno;
+    }
+    if (failed) {
+        remove(partial);
+        errno = error;
+    } else fprintf(stderr, "memories-pc: ARM64 state saved: %s\n", path);
     return failed ? -1 : 0;
 }
 int Memories_NativeStateLoad(const char *path, char *why, size_t size)
