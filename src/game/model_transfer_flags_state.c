@@ -43,7 +43,7 @@
  * bearing rather than decorative: without them these objects would be placed
  * in .sbss and leave .sdata entirely. */
 
-Key *TRANSLATED_G32 D_8009B074 PSX_SECTION(".sdata") = 0;
+Key *G32 D_8009B074 PSX_SECTION(".sdata") = 0;
 u8 D_8009B078 PSX_SECTION(".sdata") = 0;
 u8 D_8009B079 PSX_SECTION(".sdata") = 0;
 s8 D_8009B07A PSX_SECTION(".sdata") = -1;
