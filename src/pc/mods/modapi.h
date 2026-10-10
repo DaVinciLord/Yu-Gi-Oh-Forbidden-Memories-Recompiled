@@ -27,11 +27,12 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Bumped for new host services, events or manifest features. A mod records the version it was
- * built against; the host refuses a mod built against a later one. New host
- * entries only ever go at the end, so a mod built against an earlier version
- * keeps working, and one built against a later version can check host->api
- * before it calls an entry the host may not have.
+/* Bumped for new host services, events or manifest features. A mod records
+ * the version it was built against; the host refuses a mod built against a
+ * later one. New host entries only ever go at the end, so a mod built
+ * against an earlier version keeps working, and one built against a later
+ * version can check host->api before it calls an entry the host may not
+ * have.
  *   1  the first
  *   2  now_us, map_fixed; setting() reads MEMORIES_MOD_<ID>_<KEY> first
  *   3  managed events, registered state and stable card lookup
