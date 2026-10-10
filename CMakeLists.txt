@@ -243,6 +243,17 @@ if(BUILD_TESTING)
     add_executable(memories_libgs_ot_test tests/pc/libgs_ot_test.c)
     target_link_libraries(memories_libgs_ot_test PRIVATE memories_pc_core)
     add_test(NAME pc_libgs_ot COMMAND memories_libgs_ot_test)
+    add_executable(memories_texture_dump_clear_test tests/pc/texture_dump_clear_test.c
+        src/pc/render/texture_dump.c)
+    target_include_directories(memories_texture_dump_clear_test PRIVATE src)
+    if(WIN32)
+        target_link_libraries(memories_texture_dump_clear_test PRIVATE memories_pc_fs)
+    endif()
+    if(NOT MSVC)
+        target_compile_options(memories_texture_dump_clear_test PRIVATE
+            -Wall -Wextra -Wpedantic -Werror -Wno-strict-prototypes)
+    endif()
+    add_test(NAME pc_texture_dump_clear COMMAND memories_texture_dump_clear_test)
     # The translated runtime models a 64-bit host; 32-bit native targets
     # retain their existing direct-memory contracts and test inventory.
     if(CMAKE_SIZEOF_VOID_P EQUAL 8)

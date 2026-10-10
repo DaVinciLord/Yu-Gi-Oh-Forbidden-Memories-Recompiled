@@ -38,9 +38,11 @@
 #define CALL32(type, pointer) pointer
 #endif
 
-/* Tables and globals shared with translated guest memory use the 32-bit
- * guest pointer representation. Native backends keep upstream host pointers
- * for their corresponding globals. */
+/* MEMORIES_TRANSLATED selects the translated memory model, used in production
+ * by macOS ARM64. Portable test harnesses may select it on other hosts.
+ * C-defined globals pinned into translated guest memory need 32-bit pointers;
+ * fixed backends keep native pointers in those host-backed definitions.
+ * Externs that refer directly to retail guest storage use G32 on every port. */
 #if defined(MEMORIES_TRANSLATED)
 #define TRANSLATED_G32 G32
 #else

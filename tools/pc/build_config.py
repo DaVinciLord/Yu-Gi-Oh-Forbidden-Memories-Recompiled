@@ -190,7 +190,7 @@ def native_sources(target, backend="sdl"):
     sources.difference_update(FIXED_MEMORY)
     if memory_model == "fixed-32":
         # The fixed-address engine and branch thunks are part of the memory
-        # contract shared by i386, i686, and Windows x64.
+        # contract shared by i386, i686, Windows x64, and Android ARM64.
         sources.update(FIXED_MEMORY)
         sources.update(assembly)
         sources = {

@@ -240,6 +240,12 @@ def main():
             [None],
         ),
         (
+            "texture-clear-native",
+            ["tests/pc/texture_dump_clear_test.c", "src/pc/render/texture_dump.c"],
+            ["-Wno-strict-prototypes"],
+            [None],
+        ),
+        (
             "texture-provenance-translated",
             [
                 "tests/pc/texture_dump_guest_pointer_test.c",
