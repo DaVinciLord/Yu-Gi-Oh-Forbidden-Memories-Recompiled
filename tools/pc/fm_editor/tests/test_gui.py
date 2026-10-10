@@ -1556,7 +1556,9 @@ class GuiTest(GuiCase):
         app.update()
         if app.winfo_width() < 1280:
             self.skipTest("the screen is smaller than 1280 wide")
-        wide = []
+        from tkinter import font
+        wide, why = [], [f"TkDefaultFont {font.nametofont('TkDefaultFont').actual()}, "
+                         f"tk scaling {app.tk.call('tk', 'scaling')}"]
         for tab in app.tabs:
             app.notebook.select(tab)
             for _ in range(3):
@@ -1564,7 +1566,22 @@ class GuiTest(GuiCase):
                 app.after(50)
             if tab.page.xbar.winfo_ismapped():
                 wide.append((app.notebook.tab(tab.page, "text"), tab.winfo_reqwidth()))
-        self.assertEqual(wide, [])
+                why.append(wide[-1][0] + ":")
+                self.widest(tab, tab.winfo_reqwidth() * 2 // 5, 1, why)
+        self.assertEqual(wide, [], "\n".join(why))
+
+    def widest(self, widget, least, depth, lines):
+        """For a failure, what makes a tab as wide as it is: the widgets in it
+        asking for at least `least` pixels across, six levels down."""
+        for child in sorted(widget.winfo_children(), key=lambda c: -c.winfo_reqwidth()):
+            if child.winfo_reqwidth() < least or depth > 6:
+                return
+            try:
+                text = repr(str(child.cget("text"))[:60])
+            except tk.TclError:
+                text = ""
+            lines.append(f"{'  ' * depth}{child.winfo_class()} {child.winfo_reqwidth()} {text}")
+            self.widest(child, least, depth + 1, lines)
 
     def test_cards_tab_fits_the_window_in_both_looks(self):
         """The Cards tab asks for what its list and form ask, not for its
